@@ -1,4 +1,12 @@
 
+
+
+
+# Need to add different types of users
+
+
+
+
 ################################################################################################################
 #
 #                                                  WELCOME TO THE TODO LIST API!
@@ -15,6 +23,7 @@ import json
 import jwt
 import datetime
 from functools import wraps
+import os
 
 ################################################################################################################
 #
@@ -25,7 +34,7 @@ from functools import wraps
 app = Flask(__name__)
 
 #Don't forget to change this SECRET_KEY and SQLALCHEMY_DATABASE_URI and put in sepearte file or .env file and have git ignore it
-app.config['SECRET_KEY'] = 'thisissecret'
+app.config['SECRET_KEY'] = 'dkfi@%&*o49wr%^&p209fso4()903@$%$^4rwt3%^34t3#%^$&$%245g'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data/todo.db'
 
 db = SQLAlchemy(app)
@@ -38,6 +47,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(50), unique=True)
     username = db.Column(db.String(50), unique=True)
+    email = db.Column(db.String(80), unique=True)
     password = db.Column(db.String(80))
     admin = db.Column(db.Boolean)
     todos = db.relationship('Todo', backref='user', lazy=True)
@@ -140,6 +150,7 @@ def token_required(f):
 
             current_user = User.query.filter_by(public_id=data['public_id']).first()
         except:
+
             return Response(json.dumps({'message' : 'Token is invalid'}), mimetype='application/json'), 401
 
         return f(current_user, *args, **kwargs)
@@ -148,11 +159,39 @@ def token_required(f):
 
 ################################################################################################################
 #
+#                                                  CHECK TOKEN
+#
+################################################################################################################
+
+@app.route('/api/checktoken', methods=['GET'])
+@token_required
+def checktoken(currentUser):
+
+    return Response(json.dumps(currentUser), mimetype='application/json'), 200
+
+
+
+################################################################################################################
+#
+#                                                  HOME
+#
+################################################################################################################
+
+@app.route('/api/home', methods=['GET'])
+def home():
+
+    home = {'message' : "Welcome to Seolynn!" }
+
+    return Response(json.dumps(home), mimetype='application/json')
+
+
+################################################################################################################
+#
 #                                                  USER MANAGEMENT
 #
 ################################################################################################################
 
-@app.route('/user', methods=['GET'])
+@app.route('/api/user', methods=['GET'])
 @token_required
 def get_all_users(current_user):
 
@@ -160,8 +199,8 @@ def get_all_users(current_user):
 
     """
 
-    if not current_user.admin:
-        return Response(json.dumps({'message' : 'Cannot perform this action. You are not an Admin'}), mimetype='application/json')
+    # if not current_user.admin:
+    #     return Response(json.dumps({'message' : 'Cannot perform this action. You are not an Admin'}), mimetype='application/json')
 
     user_list = {}
     all_users = db.session.query(User).all()
@@ -169,11 +208,12 @@ def get_all_users(current_user):
         user_list[user.public_id] = {}
         user_list[user.public_id]['public_id'] = user.public_id
         user_list[user.public_id]['username'] = user.username
+        user_list[user.public_id]['email'] = user.email
         user_list[user.public_id]['admin'] = user.admin
 
     return Response(json.dumps(user_list), mimetype='application/json')
 
-@app.route('/user/<public_id>', methods=['GET'])
+@app.route('/api/user/<public_id>', methods=['GET'])
 @token_required
 def get_one_user(current_user, public_id):
 
@@ -181,8 +221,8 @@ def get_one_user(current_user, public_id):
 
     """
 
-    if not current_user.admin:
-        return Response(json.dumps({'message' : 'Cannot perform this action. You are not an Admin'}), mimetype='application/json')
+    # if not current_user.admin:
+    #     return Response(json.dumps({'message' : 'Cannot perform this action. You are not an Admin'}), mimetype='application/json')
 
     specific_user = db.session.query(User).filter_by(public_id=public_id).first()
 
@@ -195,12 +235,13 @@ def get_one_user(current_user, public_id):
     specific_user_object[specific_user.public_id] = {}
     specific_user_object[specific_user.public_id]['public_id'] = specific_user.public_id
     specific_user_object[specific_user.public_id]['username'] = specific_user.username
+    specific_user_object[specific_user.public_id]['email'] = specific_user.email
     specific_user_object[specific_user.public_id]['admin'] = specific_user.admin
 
 
     return Response(json.dumps(specific_user_object), mimetype='application/json')
 
-@app.route('/user', methods=['POST'])
+@app.route('/api/user', methods=['POST'])
 @token_required
 def create_user(current_user):
 
@@ -214,11 +255,12 @@ def create_user(current_user):
     data = request.get_json()
     password = data['password']
     username = data['username']
+    username = data['email']
 
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256', salt_length=10)
 
     try:
-        new_user = User(public_id=str(uuid.uuid4()), username=data['username'], password=hashed_password, admin=False)
+        new_user = User(public_id=str(uuid.uuid4()), username=data['username'], email=data['email'], password=hashed_password, admin=False)
         db.session.add(new_user)
         db.session.commit()
 
@@ -227,7 +269,28 @@ def create_user(current_user):
         db.session.rollback()
         return Response(json.dumps({'message' : f'ERROR: Cannot create user: {username}. Due to ERROR: {e}'}), mimetype='application/json')
 
-@app.route('/user/<public_id>', methods=['PUT'])
+@app.route('/api/register', methods=['POST'])
+def self_register():
+    data = request.get_json()
+    password = data['password']
+    username = data['username']
+    username = data['email']
+
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256', salt_length=10)
+
+    try:
+        new_user = User(public_id=str(uuid.uuid4()), username=data['username'], email=data['email'], password=hashed_password, admin=False)
+        db.session.add(new_user)
+        db.session.commit()
+
+        return Response(json.dumps({'message' : f'New user, {username}, created'}), mimetype='application/json')
+    except exc.IntegrityError as e:
+        db.session.rollback()
+        return Response(json.dumps({'message' : f'ERROR: Cannot create user: {username}. Due to ERROR: {e}'}), mimetype='application/json')
+
+
+
+@app.route('/api/user/<public_id>', methods=['PUT'])
 @token_required
 def promote_user(current_user, public_id):
 
@@ -249,7 +312,7 @@ def promote_user(current_user, public_id):
 
     return Response(json.dumps({'message' : f'{specific_user.username} admin status: {specific_user.admin}'}), mimetype='application/json')
 
-@app.route('/user/<public_id>', methods=['DELETE'])
+@app.route('/api/user/<public_id>', methods=['DELETE'])
 @token_required
 def delete_user(current_user, public_id):
 
@@ -273,7 +336,7 @@ def delete_user(current_user, public_id):
     return Response(json.dumps({'message' : f'{user_to_delete.username} is deleted'}), mimetype='application/json')
 
 # Only use HTTP BASIC Auth on login; all other routes concenring user managment requires jwt and admin user priveledges
-@app.route('/login')
+@app.route('/api/login', methods=['POST'])
 def login():
 
     """
@@ -281,6 +344,10 @@ def login():
     """
 
     auth = request.authorization
+
+
+
+    # need to do basic auth here
 
     if not auth or not auth.username or not auth.password:
         #return make_response('Could not verify', 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'})
@@ -292,7 +359,7 @@ def login():
         return Response(json.dumps({'message' : f'The user with username: {auth.username} doesn\'t exist.'}), mimetype='application/json'), 401, {'WWW-Authenticate' : 'Basic realm="Login required!"'}
 
     if check_password_hash(user.password, auth.password):
-        token = jwt.encode({'public_id' : user.public_id, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, app.config['SECRET_KEY'], algorithm="HS256")
+        token = jwt.encode({'public_id' : user.public_id, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=60)}, app.config['SECRET_KEY'], algorithm="HS256")
 
         return Response(json.dumps({'token' : token }), mimetype='application/json')
 
@@ -305,7 +372,7 @@ def login():
 #
 ################################################################################################################
 
-@app.route('/todo', methods=['GET'])
+@app.route('/api/todo', methods=['GET'])
 @token_required
 def get_all_todos(current_user):
 
@@ -324,7 +391,7 @@ def get_all_todos(current_user):
 
     return Response(json.dumps(todos_object), mimetype='application/json')
 
-@app.route('/todo/<todo_id>', methods=['GET'])
+@app.route('/api/todo/<todo_id>', methods=['GET'])
 @token_required
 def get_one_todo(current_user, todo_id):
 
@@ -344,7 +411,7 @@ def get_one_todo(current_user, todo_id):
     return Response(json.dumps(specific_todo_object), mimetype='application/json')
 
 
-@app.route('/todo', methods=['POST'])
+@app.route('/api/todo', methods=['POST'])
 @token_required
 def create_todo(current_user):
 
@@ -366,7 +433,7 @@ def create_todo(current_user):
         db.session.rollback()
         return Response(json.dumps({'message' : f'ERROR: Cannot create todo: {text}. Due to ERROR: {e}'}), mimetype='application/json')
 
-@app.route('/todo/<todo_id>', methods=['PUT'])
+@app.route('/api/todo/<todo_id>', methods=['PUT'])
 @token_required
 def complete_todo(current_user, todo_id):
 
@@ -381,7 +448,7 @@ def complete_todo(current_user, todo_id):
 
     return Response(json.dumps({'message' : f'Task, {specific_todo.text}, is complete status: {specific_todo.complete}'}), mimetype='application/json')
 
-@app.route('/todo/<todo_id>', methods=['DELETE'])
+@app.route('/api/todo/<todo_id>', methods=['DELETE'])
 @token_required
 def delete_todo(current_user, todo_id):
 
@@ -405,7 +472,7 @@ def delete_todo(current_user, todo_id):
 ################################################## BRANDS ######################################################
 
 #Get all brands
-@app.route('/brands', methods=['GET'])
+@app.route('/api/brands', methods=['GET'])
 def get_all_brands():
     brands = Brand.query.all()
     object = {}
@@ -418,7 +485,7 @@ def get_all_brands():
     return Response(json.dumps(object), mimetype='application/json'), 200
 
 #Get one brand
-@app.route('/brands/<brand_id>', methods=['GET'])
+@app.route('/api/brands/<brand_id>', methods=['GET'])
 def get_one_brand(brand_id):
     one_brand = Brand.query.filter_by(id=brand_id).first()
     object = {}
@@ -430,7 +497,7 @@ def get_one_brand(brand_id):
     return Response(json.dumps(object), mimetype='application/json'), 200
 
 #Create a new brand
-@app.route('/brands', methods=['POST'])
+@app.route('/api/brands', methods=['POST'])
 def create_brand():
     data = request.get_json()
     new_brand = Brand(name=data["name"])
@@ -452,7 +519,7 @@ def create_brand():
     return Response(json.dumps(object), mimetype='application/json'), 200
 
 #Modify a brand
-@app.route('/brands/<brand_id>', methods=['PATCH'])
+@app.route('/api/brands/<brand_id>', methods=['PATCH'])
 def modify_brand(brand_id):
     data = request.get_json()
     new_name = data["name"]
@@ -474,7 +541,7 @@ def modify_brand(brand_id):
     return Response(json.dumps(object), mimetype='application/json'), 200
 
 #Delete a brand; WARNING: will not work in SQL DB if it has objects related to it
-@app.route('/brands/<brand_id>', methods=['DELETE'])
+@app.route('/api/brands/<brand_id>', methods=['DELETE'])
 def delete_brand(brand_id):
     data = request.get_json()
     new_name = data["name"]
@@ -499,147 +566,202 @@ def delete_brand(brand_id):
 ################################################## MODELS ######################################################
 
 #Get all models for a brand_id
-@app.route('/models/<brand_id>', methods=['GET'])
+@app.route('/api/models/<brand_id>', methods=['GET'])
 def get_all_models(brand_id):
     return ''
 
 #Get one model for a model_id
-@app.route('/models/<model_id>', methods=['GET'])
+@app.route('/api/models/<model_id>', methods=['GET'])
 def get_one_model(model_id):
     return ''
 
 #Create a new model
-@app.route('/models', methods=['POST'])
+@app.route('/api/models', methods=['POST'])
 def create_model():
     return ''
 
 #Modify a model
-@app.route('/models/<model_id>', methods=['PATCH'])
+@app.route('/api/models/<model_id>', methods=['PATCH'])
 def modify_model(model_id):
     return ''
 
 #Delete a model; WARNING: will not work in SQL DB if it has objects related to it
-@app.route('/models/<model_id>', methods=['DELETE'])
+@app.route('/api/models/<model_id>', methods=['DELETE'])
 def delete_model(model_id):
     return ''
 
 ################################################## REPAIR AREA #################################################
 
 #Get all repairs for a model_id
-@app.route('/repairs/<model_id>', methods=['GET'])
+@app.route('/api/repairs/<model_id>', methods=['GET'])
 def get_all_repairs(model_id):
     return ''
 
 #Get one repair for a repair_id
-@app.route('/repairs/<repair_id>', methods=['GET'])
+@app.route('/api/repairs/<repair_id>', methods=['GET'])
 def get_one_repair(repair_id):
     return ''
 
 #Create a new repair
-@app.route('/repairs', methods=['POST'])
+@app.route('/api/repairs', methods=['POST'])
 def create_repair():
     return ''
 
 #Modify a repair
-@app.route('/repairs/<repair_id>', methods=['PATCH'])
+@app.route('/api/repairs/<repair_id>', methods=['PATCH'])
 def modify_repair(repair_id):
     return ''
 
 #Delete a repair; WARNING: will not work in SQL DB if it has objects related to it
-@app.route('/repairs/<repair_id>', methods=['DELETE'])
+@app.route('/api/repairs/<repair_id>', methods=['DELETE'])
 def delete_repair(repair_id):
     return ''
 
 ################################################## PARTS #######################################################
 
 #Get all parts for a repair_id
-@app.route('/parts/<repair_id>', methods=['GET'])
+@app.route('/api/parts/<repair_id>', methods=['GET'])
 def get_all_parts(repair_id):
     return ''
 
 #Get one part for a part_id
-@app.route('/parts/<part_id>', methods=['GET'])
+@app.route('/api/parts/<part_id>', methods=['GET'])
 def get_one_part(part_id):
     return ''
 
 #Create a new part
-@app.route('/parts', methods=['POST'])
+@app.route('/api/parts', methods=['POST'])
 def create_part():
     return ''
 
 #Modify a part
-@app.route('/parts/<part_id>', methods=['PATCH'])
+@app.route('/api/parts/<part_id>', methods=['PATCH'])
 def modify_part(part_id):
     return ''
 
 #Delete a part; WARNING: will not work in SQL DB if it has objects related to it
-@app.route('/parts/<part_id>', methods=['DELETE'])
+@app.route('/api/parts/<part_id>', methods=['DELETE'])
 def delete_part(part_id):
     return ''
 
 ################################################## LOCATIONS ###################################################
 
 #Get all locations
-@app.route('/locations', methods=['GET'])
+@app.route('/api/locations', methods=['GET'])
 def get_all_locations():
     return ''
 
 #Get one part for a part_id
-@app.route('/locations/<location_id>', methods=['GET'])
+@app.route('/api/locations/<location_id>', methods=['GET'])
 def get_one_location(location_id):
     return ''
 
 #Create a new part
-@app.route('/locations', methods=['POST'])
+@app.route('/api/locations', methods=['POST'])
 def create_location():
     return ''
 
 #Modify a part
-@app.route('/locations/<location_id>', methods=['PATCH'])
+@app.route('/api/locations/<location_id>', methods=['PATCH'])
 def modify_location(location_id):
     return ''
 
 #Delete a part; WARNING: will not work in SQL DB if it has objects related to it
-@app.route('/locations/<location_id>', methods=['DELETE'])
+@app.route('/api/locations/<location_id>', methods=['DELETE'])
 def delete_location(location_id):
     return ''
 
 ################################################## INVENTORY #####################################################
 
 #Get all inventory
-@app.route('/inventory', methods=['GET'])
+@app.route('/api/inventory', methods=['GET'])
 def get_all_stock():
     return ''
 
 #Get all stock for a location
-@app.route('/inventory/<location_id>', methods=['GET'])
+@app.route('/api/inventory/<location_id>', methods=['GET'])
 def get_stock_for_one_location(location_id):
     return ''
 
 #Get all stock for a part
-@app.route('/inventory/<part_id>', methods=['GET'])
+@app.route('/api/inventory/<part_id>', methods=['GET'])
 def get_stock_for_one_part(part_id):
     return ''
 
 #Get all stock for a repair
-@app.route('/inventory/<repair_id>', methods=['GET'])
+@app.route('/api/inventory/<repair_id>', methods=['GET'])
 def get_stock_for_one_repair(repair_id):
     return ''
 
 #Create a new stock in a location
-@app.route('/inventory', methods=['POST'])
+@app.route('/api/inventory', methods=['POST'])
 def create_stock():
     return ''
 
 #Modify a stock or add if not found; Using PUT instead of PATCH
-@app.route('/inventory/<inventory_id>', methods=['PUT'])
+@app.route('/api/inventory/<inventory_id>', methods=['PUT'])
 def modify_stock(inventory_id):
     return ''
 
 #Delete a part; WARNING: will not work in SQL DB if it has objects related to it
-@app.route('/inventory/<inventory_id>', methods=['DELETE'])
+@app.route('/api/inventory/<inventory_id>', methods=['DELETE'])
 def delete_stock(inventory_id):
     return ''
+
+
+################################################################################################################
+#
+#                                                  JLPT N5 Level
+#
+################################################################################################################
+
+@app.route('/api/japanese/<level>/all')
+@token_required
+def get_all_json(currentUser, level):
+    json_for_all = open(os.path.join( app.static_folder, f'json/{level}', f"{level}_all.json"), "r")
+    data = json.load(json_for_all)
+    print(data)
+    return Response(json.dumps(data), mimetype='application/json')
+
+@app.route('/api/japanese/<level>/info')
+@token_required
+def get_json_info(currentUser, level):
+    data = [
+                'all',
+                '01',
+                '02',
+                '03',
+                '04',
+                '05',
+                '06',
+                '07',
+                '08',
+                '09',
+                '10',
+                '11',
+                '12',
+                '13',
+                '14',
+                '15',
+                '16',
+                '17',
+                '18',
+                '19',
+                '20',
+                '21'
+            ]
+
+    return Response(json.dumps(data), mimetype='application/json')
+
+@app.route('/api/japanese/<level>/<id>')
+@token_required
+def get_json_one_lesson(currentUser, level, id):
+    json_one_lesson = open(os.path.join( app.static_folder, f'json/{level}', f"{level}_" + id + ".json"), "r")
+    data = json.load(json_one_lesson)
+    return Response(json.dumps(data), mimetype='application/json')
+
+
+
 
 ################################################################################################################
 #
